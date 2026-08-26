@@ -79,7 +79,9 @@ The manual defaults are channels `42420` and `42421`. Version 2.9 continues to u
 
 ## External monitor controls
 
-Attach a monitor directly to the main computer or through a wired peripheral network before starting `music`. The player automatically uses the monitor, selects the smallest text scale, and provides large touch controls for tabs, playback, skipping, loop mode, search results, and volume. If the monitor is attached or removed while the program is running, the UI switches displays automatically.
+An external monitor is optional. Without one, the player runs on the main computer terminal and provides keyboard controls: `S` searches, number keys open results, `P` plays or stops, `N` skips, `L` changes loop mode, and `-`/`+` control volume. On a selected search result, use `P` to play now, `N` to play next, `A` to queue it, or `B` to go back. Advanced Computer terminals can still use mouse clicks.
+
+If you attach a monitor directly to the main computer or through a wired peripheral network, the player automatically uses it, selects the smallest text scale, and provides large touch controls for tabs, playback, skipping, loop mode, search results, and volume. If the monitor is attached or removed while the program is running, the UI switches displays automatically.
 
 The Now Playing dashboard is centered and capped at a readable width on large displays. A 3-block-wide by 2-block-high monitor gets taller playback buttons, a centered song display and queue, and larger two-row keyboard keys instead of controls being stretched across the full screen.
 

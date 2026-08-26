@@ -1,6 +1,6 @@
 # ComputerCraft Streaming Music — Full Setup Guide
 
-This guide covers the main player, directly attached speakers, wireless speaker receivers, the 3×2 monitor UI, and separate multiplayer speaker groups.
+This guide covers the main player, directly attached speakers, wireless speaker receivers, use with or without an external monitor, and separate multiplayer speaker groups.
 
 This enhanced version is based on [Terren Gurule's original ComputerCraft Streaming Music project](https://github.com/terreng/computercraft-streaming-music) and keeps its MIT license.
 
@@ -122,7 +122,24 @@ music
 
 Matching receivers should be discovered automatically. The main UI displays attached, wireless, and synchronizing output counts.
 
-## 8. Use the monitor UI
+## 8. Use with or without a monitor
+
+An external monitor is optional. If none is attached, `music` uses the main computer's own terminal and shows the available keyboard shortcuts along its bottom edge.
+
+Terminal controls:
+
+- `S`: search, then type a query and press Enter
+- `1`–`9`: open a numbered search result
+- `P`: play or stop; on a selected result, play it now
+- `N`: skip; on a selected result, play it next
+- `A`: add the selected result to the queue
+- `B`: go back
+- `L`: change loop mode
+- `-` / `+`: lower or raise the volume
+
+The computer terminal can also be clicked when using an Advanced Computer.
+
+### Optional monitor UI
 
 The monitor provides touch controls for:
 
@@ -134,7 +151,7 @@ The monitor provides touch controls for:
 - Volume
 - An on-screen search keyboard
 
-A standard ComputerCraft monitor does not accept a physical keyboard directly. Use the on-screen keyboard after starting `music`, or enter setup commands through the main computer's own terminal.
+A standard ComputerCraft monitor does not accept a physical keyboard directly. Use the on-screen keyboard after starting `music`, or enter setup commands through the main computer's own terminal. Attaching or removing a monitor while `music` is running switches the interface automatically.
 
 ## 9. Add a receiver while music is playing
 

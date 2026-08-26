@@ -592,6 +592,104 @@ function redrawScreen()
 	if tab == 1 then drawNowPlaying() else drawSearch() end
 end
 
+local function togglePlayback()
+	if playing then
+		playing = false
+		stopPlaybackOutputs()
+		playing_id = nil
+		is_loading = false
+		is_error = false
+		os.queueEvent("audio_update")
+	elseif now_playing ~= nil then
+		playing_id = nil
+		playing = true
+		is_error = false
+		os.queueEvent("audio_update")
+	elseif #queue > 0 then
+		now_playing = queue[1]
+		table.remove(queue, 1)
+		playing_id = nil
+		playing = true
+		is_error = false
+		os.queueEvent("audio_update")
+	end
+end
+
+local function skipTrack()
+	if now_playing == nil and #queue == 0 then return end
+	is_error = false
+	if playing then stopPlaybackOutputs() end
+	if #queue > 0 then
+		if looping == 1 and now_playing ~= nil then
+			table.insert(queue, now_playing)
+		end
+		now_playing = queue[1]
+		table.remove(queue, 1)
+		playing_id = nil
+	else
+		now_playing = nil
+		playing = false
+		is_loading = false
+		is_error = false
+		playing_id = nil
+	end
+	os.queueEvent("audio_update")
+end
+
+local function cycleLoopMode()
+	looping = (looping + 1) % 3
+end
+
+local function openSearchResult(index)
+	if search_results and search_results[index] then
+		in_search_result = true
+		clicked_result = index
+	end
+end
+
+local function useSearchResult(action)
+	local result = search_results and search_results[clicked_result]
+	if not result then return end
+
+	if action == "play" then
+		in_search_result = false
+		stopPlaybackOutputs()
+		playing = true
+		is_error = false
+		playing_id = nil
+		if result.type == "playlist" then
+			now_playing = result.playlist_items[1]
+			queue = {}
+			for index = 2, #result.playlist_items do
+				table.insert(queue, result.playlist_items[index])
+			end
+		else
+			now_playing = result
+		end
+	elseif action == "next" then
+		in_search_result = false
+		if result.type == "playlist" then
+			for index = #result.playlist_items, 1, -1 do
+				table.insert(queue, 1, result.playlist_items[index])
+			end
+		else
+			table.insert(queue, 1, result)
+		end
+	elseif action == "queue" then
+		in_search_result = false
+		if result.type == "playlist" then
+			for index = 1, #result.playlist_items do
+				table.insert(queue, result.playlist_items[index])
+			end
+		else
+			table.insert(queue, result)
+		end
+	elseif action == "cancel" then
+		in_search_result = false
+	end
+	os.queueEvent("audio_update")
+end
+
 function drawNowPlaying()
 	local layout = nowPlayingLayout()
 	if now_playing then
@@ -643,6 +741,10 @@ function drawNowPlaying()
 			writeCentered(titleY + 1, queue[index].artist, colors.lightGray, colors.black, layout.left, layout.right)
 		end
 	end
+
+	if not display_name then
+		writeCentered(height, "Keys S:search P:play N:next L:loop -/+:volume", colors.gray)
+	end
 end
 
 function drawSearch()
@@ -653,15 +755,15 @@ function drawSearch()
 		local result = search_results[clicked_result]
 		writeCentered(2, result.name, colors.white, colors.black, searchLeft, searchRight)
 		writeCentered(3, result.artist, colors.lightGray, colors.black, searchLeft, searchRight)
-		drawButton(searchLeft, 5, searchRight, 5, "PLAY NOW", colors.green, colors.white)
-		drawButton(searchLeft, 7, searchRight, 7, "PLAY NEXT", colors.blue, colors.white)
-		drawButton(searchLeft, 9, searchRight, 9, "ADD TO QUEUE", colors.orange, colors.white)
-		drawButton(searchLeft, 11, searchRight, 11, "CANCEL", colors.gray, colors.white)
+		drawButton(searchLeft, 5, searchRight, 5, display_name and "PLAY NOW" or "[P] PLAY NOW", colors.green, colors.white)
+		drawButton(searchLeft, 7, searchRight, 7, display_name and "PLAY NEXT" or "[N] PLAY NEXT", colors.blue, colors.white)
+		drawButton(searchLeft, 9, searchRight, 9, display_name and "ADD TO QUEUE" or "[A] ADD TO QUEUE", colors.orange, colors.white)
+		drawButton(searchLeft, 11, searchRight, 11, display_name and "CANCEL" or "[B] BACK", colors.gray, colors.white)
 		return
 	end
 
 	paintutils.drawFilledBox(searchLeft, 3, searchRight, 5, keyboard_visible and colors.white or colors.lightGray)
-	local inputText = keyboard_visible and keyboard_input or (last_search or "Touch to search...")
+	local inputText = keyboard_visible and keyboard_input or (last_search or (display_name and "Touch to search..." or "Press S to search..."))
 	local inputWidth = searchRight - searchLeft - 3
 	if keyboard_visible and #inputText > inputWidth then inputText = "..." .. inputText:sub(-math.max(1, inputWidth - 3)) end
 	writeLine(searchLeft + 1, 4, inputText, colors.black, keyboard_visible and colors.white or colors.lightGray)
@@ -675,7 +777,8 @@ function drawSearch()
 		for index = 1, #search_results do
 			local titleY = 7 + (index - 1) * 2
 			if titleY > height then break end
-			writeLine(searchLeft, titleY, search_results[index].name, colors.white)
+			local prefix = display_name and "" or ("[" .. index .. "] ")
+			writeLine(searchLeft, titleY, prefix .. search_results[index].name, colors.white)
 			writeLine(searchLeft, titleY + 1, search_results[index].artist, colors.lightGray)
 		end
 	elseif search_error then
@@ -683,8 +786,12 @@ function drawSearch()
 	elseif last_search_url then
 		writeCentered(7, "Searching...", colors.yellow, colors.black, searchLeft, searchRight)
 	else
-		writeCentered(7, display_name and "Touch the box to open the keyboard" or "Click the box, then type your search", colors.lightGray, colors.black, searchLeft, searchRight)
+		writeCentered(7, display_name and "Touch the box to open the keyboard" or "Press S, then type your search", colors.lightGray, colors.black, searchLeft, searchRight)
 		writeCentered(8, "YouTube links also work", colors.gray, colors.black, searchLeft, searchRight)
+	end
+
+	if not display_name then
+		writeCentered(height, search_results and "Keys S:search 1-9:select B:back" or "Keys S:search B:back", colors.gray)
 	end
 end
 
@@ -699,6 +806,58 @@ local function pullPointerClick()
 	end
 end
 
+local function beginTerminalSearch()
+	tab = 2
+	keyboard_visible = false
+	redrawScreen()
+	local searchLeft, searchRight = contentBounds(70)
+	paintutils.drawFilledBox(searchLeft, 3, searchRight, 5, colors.white)
+	waiting_for_input = true
+end
+
+local function handleTerminalShortcut()
+	while true do
+		local _, character = os.pullEvent("char")
+		if not display_name then
+			character = character:lower()
+			if tab == 2 and in_search_result then
+				if character == "p" then
+					useSearchResult("play")
+				elseif character == "n" then
+					useSearchResult("next")
+				elseif character == "a" then
+					useSearchResult("queue")
+				elseif character == "b" then
+					useSearchResult("cancel")
+				else
+					return
+				end
+			elseif tab == 2 and character:match("^[1-9]$") then
+				openSearchResult(tonumber(character))
+			elseif character == "s" then
+				beginTerminalSearch()
+				return
+			elseif character == "p" then
+				togglePlayback()
+			elseif character == "n" then
+				skipTrack()
+			elseif character == "l" then
+				cycleLoopMode()
+			elseif character == "+" or character == "=" then
+				volume = math.min(3, volume + 0.15)
+			elseif character == "-" then
+				volume = math.max(0, volume - 0.15)
+			elseif character == "b" and tab == 2 then
+				tab = 1
+			else
+				return
+			end
+			redrawScreen()
+			return
+		end
+	end
+end
+
 function uiLoop()
 	redrawScreen()
 
@@ -706,7 +865,8 @@ function uiLoop()
 		if waiting_for_input then
 			parallel.waitForAny(
 				function()
-					term.setCursorPos(3,4)
+					local searchLeft = contentBounds(70)
+					term.setCursorPos(searchLeft + 1, 4)
 					term.setBackgroundColor(colors.white)
 					term.setTextColor(colors.black)
 					local input = read()
@@ -763,9 +923,7 @@ function uiLoop()
 									keyboard_visible = true
 									redrawScreen()
 								else
-									paintutils.drawFilledBox(2,3,width-1,5,colors.white)
-									term.setBackgroundColor(colors.white)
-									waiting_for_input = true
+									beginTerminalSearch()
 								end
 							end
 		
@@ -792,71 +950,14 @@ function uiLoop()
 						elseif tab == 2 and in_search_result == true then
 							-- Search result menu clicks
 		
-							term.setBackgroundColor(colors.white)
-							term.setTextColor(colors.black)
-		
 							if y == 5 then
-								term.setCursorPos(2,5)
-								term.clearLine()
-								term.write("Play now")
-								sleep(0.2)
-								in_search_result = false
-								stopPlaybackOutputs()
-								playing = true
-								is_error = false
-								playing_id = nil
-								if search_results[clicked_result].type == "playlist" then
-									now_playing = search_results[clicked_result].playlist_items[1]
-									queue = {}
-									if #search_results[clicked_result].playlist_items > 1 then
-										for i=2, #search_results[clicked_result].playlist_items do
-											table.insert(queue, search_results[clicked_result].playlist_items[i])
-										end
-									end
-								else
-									now_playing = search_results[clicked_result]
-								end
-								os.queueEvent("audio_update")
-							end
-		
-							if y == 7 then
-								term.setCursorPos(2,7)
-								term.clearLine()
-								term.write("Play next")
-								sleep(0.2)
-								in_search_result = false
-								if search_results[clicked_result].type == "playlist" then
-									for i = #search_results[clicked_result].playlist_items, 1, -1 do
-										table.insert(queue, 1, search_results[clicked_result].playlist_items[i])
-									end
-								else
-									table.insert(queue, 1, search_results[clicked_result])
-								end
-								os.queueEvent("audio_update")
-							end
-		
-							if y == 9 then
-								term.setCursorPos(2,9)
-								term.clearLine()
-								term.write("Add to queue")
-								sleep(0.2)
-								in_search_result = false
-								if search_results[clicked_result].type == "playlist" then
-									for i = 1, #search_results[clicked_result].playlist_items do
-										table.insert(queue, search_results[clicked_result].playlist_items[i])
-									end
-								else
-									table.insert(queue, search_results[clicked_result])
-								end
-								os.queueEvent("audio_update")
-							end
-		
-							if y == 11 then
-								term.setCursorPos(2,11)
-								term.clearLine()
-								term.write("Cancel")
-								sleep(0.2)
-								in_search_result = false
+								useSearchResult("play")
+							elseif y == 7 then
+								useSearchResult("next")
+							elseif y == 9 then
+								useSearchResult("queue")
+							elseif y == 11 then
+								useSearchResult("cancel")
 							end
 		
 							redrawScreen()
@@ -867,62 +968,17 @@ function uiLoop()
 							if y >= layout.buttonY1 and y <= layout.buttonY2 then
 								-- Play/stop button
 								if x >= layout.play.x1 and x <= layout.play.x2 then
-									if playing then
-										playing = false
-										stopPlaybackOutputs()
-										playing_id = nil
-										is_loading = false
-										is_error = false
-										os.queueEvent("audio_update")
-									elseif now_playing ~= nil then
-										playing_id = nil
-										playing = true
-										is_error = false
-										os.queueEvent("audio_update")
-									elseif #queue > 0 then
-										now_playing = queue[1]
-										table.remove(queue, 1)
-										playing_id = nil
-										playing = true
-										is_error = false
-										os.queueEvent("audio_update")
-									end
+									togglePlayback()
 								end
 		
 								-- Skip button
 								if x >= layout.skip.x1 and x <= layout.skip.x2 then
-									if now_playing ~= nil or #queue > 0 then
-										is_error = false
-										if playing then
-											stopPlaybackOutputs()
-										end
-										if #queue > 0 then
-											if looping == 1 then
-												table.insert(queue, now_playing)
-											end
-											now_playing = queue[1]
-											table.remove(queue, 1)
-											playing_id = nil
-										else
-											now_playing = nil
-											playing = false
-											is_loading = false
-											is_error = false
-											playing_id = nil
-										end
-										os.queueEvent("audio_update")
-									end
+									skipTrack()
 								end
 		
 								-- Loop button
 								if x >= layout.loop.x1 and x <= layout.loop.x2 then
-									if looping == 0 then
-										looping = 1
-									elseif looping == 1 then
-										looping = 2
-									else
-										looping = 0
-									end
+									cycleLoopMode()
 								end
 							end
 
@@ -973,7 +1029,8 @@ function uiLoop()
 					local event = os.pullEvent("redraw_screen")
 
 					redrawScreen()
-				end
+				end,
+				handleTerminalShortcut
 			)
 		end
 	end
